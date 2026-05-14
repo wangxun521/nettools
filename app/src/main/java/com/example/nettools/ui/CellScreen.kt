@@ -89,9 +89,8 @@ fun CellScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(towers, key = { it.tech + (it.cellId ?: 0) + (it.pci ?: 0) }) {
-                    TowerCard(it)
-                }
+                // 不用 key，避免空 CID/PCI 邻区导致 key 重复崩溃
+                items(towers) { TowerCard(it) }
             }
         } else if (granted) {
             Spacer(Modifier.height(12.dp))

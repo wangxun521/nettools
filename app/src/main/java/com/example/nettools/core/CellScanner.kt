@@ -56,29 +56,27 @@ object CellScanner {
     fun stream(ctx: Context, intervalMs: Long = 3_000): Flow<List<CellTower>> = flow {
         val tm = ctx.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
         while (true) {
-            val infos: List<CellInfo> = runCatching { tm.allCellInfo ?: emptyList() }
-                .getOrDefault(emptyList())
-            emit(infos.mapNotNull(::parse)
-                .sortedWith(compareByDescending<CellTower> { it.isServing }.thenByDescending { it.dbm }))
+            val towers = runCatching {
+                val infos: List<CellInfo> = tm.allCellInfo ?: emptyList()
+                infos.mapNotNull(::parse)
+                    .sortedWith(compareByDescending<CellTower> { it.isServing }
+                        .thenByDescending { it.dbm })
+            }.getOrDefault(emptyList())
+            emit(towers)
             delay(intervalMs)
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun parse(info: CellInfo): CellTower? {
-        if (!info.isAvailableSafe()) return null
-        return when (info) {
-            is CellInfoLte -> parseLte(info)
-            is CellInfoGsm -> parseGsm(info)
-            is CellInfoWcdma -> parseWcdma(info)
-            is CellInfoTdscdma -> if (Build.VERSION.SDK_INT >= 29) parseTdscdma(info) else null
-            else -> if (Build.VERSION.SDK_INT >= 29 && info is CellInfoNr) parseNr(info) else null
+    private fun parse(info: CellInfo): CellTower? = runCatching {
+        when {
+            info is CellInfoLte -> parseLte(info)
+            info is CellInfoGsm -> parseGsm(info)
+            info is CellInfoWcdma -> parseWcdma(info)
+            Build.VERSION.SDK_INT >= 29 && info is CellInfoNr -> parseNr(info)
+            Build.VERSION.SDK_INT >= 29 && info is CellInfoTdscdma -> parseTdscdma(info)
+            else -> null
         }
-    }
-
-    private fun CellInfo.isAvailableSafe(): Boolean = runCatching {
-        if (Build.VERSION.SDK_INT >= 28) this.cellConnectionStatus != CellInfo.CONNECTION_UNKNOWN || this.isRegistered
-        else this.isRegistered || true
-    }.getOrDefault(true)
+    }.getOrNull()
 
     private fun parseLte(c: CellInfoLte): CellTower {
         val id = c.cellIdentity
