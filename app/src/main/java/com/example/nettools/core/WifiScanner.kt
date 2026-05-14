@@ -7,11 +7,14 @@ import android.content.IntentFilter
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 data class WifiAp(
     val ssid: String,
@@ -20,14 +23,15 @@ data class WifiAp(
     val frequencyMhz: Int,
     val channel: Int,
     val band: String,
+    val widthMhz: String,         // 20 / 40 / 80 / 160 / 80+80 / 320
     val capabilities: String,
     val security: String,
     val isHidden: Boolean,
+    val timestampUs: Long,
 )
 
 object WifiScanner {
 
-    /** 一次性读取系统缓存的扫描结果（不主动触发扫描） */
     @Suppress("MissingPermission")
     fun snapshot(ctx: Context): List<WifiAp> {
         val wm = ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -35,16 +39,23 @@ object WifiScanner {
     }
 
     /**
-     * 触发一次主动扫描并通过 broadcast 回调结果。
-     * Android 9+ 后台限速：前台 4 次/2 分钟，超出会用最近一次缓存。
+     * 持续扫描：监听系统广播 + 定时主动触发 + 定时重读缓存。
+     * Android 9+ 主扫限速 4 次/2 分钟，超出后只读缓存（仍能反映背景扫描更新）。
+     *
+     * @param activeIntervalMs 触发 startScan 的间隔
+     * @param pollIntervalMs   重读缓存的间隔（更高频，体感更快）
      */
     @Suppress("MissingPermission", "DEPRECATION")
-    fun scanOnce(ctx: Context): Flow<List<WifiAp>> = callbackFlow {
+    fun continuousScan(
+        ctx: Context,
+        activeIntervalMs: Long = 8_000,
+        pollIntervalMs: Long = 1_200,
+    ): Flow<List<WifiAp>> = callbackFlow {
         val wm = ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
-                val updated = i?.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, true) ?: true
-                if (updated) trySend(wm.scanResults.map(::toAp).sortedByDescending { it.rssiDbm })
+                trySend(wm.scanResults.map(::toAp).sortedByDescending { it.rssiDbm })
             }
         }
         val filter = IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
@@ -54,12 +65,29 @@ object WifiScanner {
             ctx.registerReceiver(receiver, filter)
         }
 
-        // 先发一次缓存，避免空白
+        // 立即出一份缓存
         trySend(wm.scanResults.map(::toAp).sortedByDescending { it.rssiDbm })
-        // 触发主动扫描
-        wm.startScan()
 
-        awaitClose { runCatching { ctx.unregisterReceiver(receiver) } }
+        // 主动触发循环（被限速时静默失败，不影响读取）
+        val activeJob = launch {
+            wm.startScan()
+            while (isActive) {
+                delay(activeIntervalMs)
+                runCatching { wm.startScan() }
+            }
+        }
+        // 缓存重读循环
+        val pollJob = launch {
+            while (isActive) {
+                delay(pollIntervalMs)
+                trySend(wm.scanResults.map(::toAp).sortedByDescending { it.rssiDbm })
+            }
+        }
+
+        awaitClose {
+            activeJob.cancel(); pollJob.cancel()
+            runCatching { ctx.unregisterReceiver(receiver) }
+        }
     }.flowOn(Dispatchers.IO)
 
     private fun toAp(s: ScanResult): WifiAp {
@@ -69,25 +97,38 @@ object WifiScanner {
             @Suppress("DEPRECATION") s.SSID
         }
         val hidden = rawSsid.isNullOrBlank()
-        val ch = freqToChannel(s.frequency)
         return WifiAp(
             ssid = if (hidden) "<隐藏 SSID>" else rawSsid!!,
             bssid = s.BSSID ?: "",
             rssiDbm = s.level,
             frequencyMhz = s.frequency,
-            channel = ch,
+            channel = freqToChannel(s.frequency),
             band = bandOf(s.frequency),
+            widthMhz = widthString(s),
             capabilities = s.capabilities ?: "",
             security = parseSecurity(s.capabilities ?: ""),
             isHidden = hidden,
+            timestampUs = s.timestamp,
         )
+    }
+
+    private fun widthString(s: ScanResult): String {
+        if (Build.VERSION.SDK_INT < 23) return "?"
+        return when (s.channelWidth) {
+            ScanResult.CHANNEL_WIDTH_20MHZ -> "20"
+            ScanResult.CHANNEL_WIDTH_40MHZ -> "40"
+            ScanResult.CHANNEL_WIDTH_80MHZ -> "80"
+            ScanResult.CHANNEL_WIDTH_160MHZ -> "160"
+            ScanResult.CHANNEL_WIDTH_80MHZ_PLUS_MHZ -> "80+80"
+            else -> if (Build.VERSION.SDK_INT >= 33 && s.channelWidth == 5) "320" else "?"
+        }
     }
 
     private fun freqToChannel(mhz: Int): Int = when {
         mhz == 2484 -> 14
         mhz in 2412..2472 -> (mhz - 2412) / 5 + 1
         mhz in 5170..5825 -> (mhz - 5000) / 5
-        mhz in 5955..7115 -> (mhz - 5950) / 5   // 6 GHz (Wi-Fi 6E)
+        mhz in 5955..7115 -> (mhz - 5950) / 5
         else -> 0
     }
 
@@ -113,7 +154,6 @@ object WifiScanner {
         return s.trim().toString()
     }
 
-    /** 用于排 2.4G / 5G 信道冲突；同信道台数越多越拥挤 */
     fun channelCongestion(aps: List<WifiAp>): Map<Pair<String, Int>, Int> =
         aps.groupingBy { it.band to it.channel }.eachCount()
 }

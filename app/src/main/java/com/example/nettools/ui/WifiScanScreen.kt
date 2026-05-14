@@ -3,6 +3,7 @@ package com.example.nettools.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -13,11 +14,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,9 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.nettools.core.WifiAp
 import com.example.nettools.core.WifiScanner
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 
 @Composable
 fun WifiScanScreen() {
@@ -46,18 +44,16 @@ fun WifiScanScreen() {
         ActivityResultContracts.RequestPermission()
     ) { granted = it }
 
+    var running by remember { mutableStateOf(true) }
     val aps = remember { mutableStateListOf<WifiAp>() }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
-    val scope = rememberCoroutineScope()
-    val scanning = scanJob?.isActive == true
+    var lastUpdateMs by remember { mutableLongStateOf(0L) }
 
-    val startScan = {
-        scanJob?.cancel()
-        aps.clear()
-        scanJob = scope.launch {
-            WifiScanner.scanOnce(ctx).collect {
-                aps.clear(); aps.addAll(it)
-            }
+    // 持续扫描：进入屏幕自动开始，granted 变化 / running 切换时重启
+    LaunchedEffect(granted, running) {
+        if (!granted || !running) return@LaunchedEffect
+        WifiScanner.continuousScan(ctx).collect {
+            aps.clear(); aps.addAll(it)
+            lastUpdateMs = SystemClock.elapsedRealtime()
         }
     }
 
@@ -76,26 +72,40 @@ fun WifiScanScreen() {
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FilledTonalButton(enabled = granted, onClick = { startScan() }) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+            FilledTonalButton(enabled = granted, onClick = { running = !running }) {
+                Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(if (scanning) "扫描中…" else "开始扫描")
+                Text(if (running) "暂停" else "继续")
             }
             Spacer(Modifier.width(12.dp))
-            Text("发现 ${aps.size} 个网络",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (running && granted) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Column {
+                Text("发现 ${aps.size} 个网络",
+                    style = MaterialTheme.typography.bodyMedium)
+                if (lastUpdateMs > 0) {
+                    val sec = ((SystemClock.elapsedRealtime() - lastUpdateMs) / 1000).coerceAtLeast(0)
+                    Text(
+                        if (sec < 2) "刚刚更新" else "${sec}s 前更新",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(8.dp))
         if (aps.isNotEmpty()) {
-            val congestion = remember(aps.toList()) { WifiScanner.channelCongestion(aps) }
             Text(buildBandSummary(aps),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
+            val congestion = WifiScanner.channelCongestion(aps)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(aps) { ap ->
+                items(aps, key = { it.bssid + it.frequencyMhz }) { ap ->
                     ApCard(ap, sameChannel = congestion[ap.band to ap.channel] ?: 1)
                 }
             }
@@ -127,11 +137,9 @@ private fun ApCard(ap: WifiAp, sameChannel: Int) {
                 Text(ap.ssid, style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(ap.bssid, fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Text(ap.bssid, fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Chip(ap.band, barColor)
@@ -140,6 +148,8 @@ private fun ApCard(ap: WifiAp, sameChannel: Int) {
                         if (sameChannel > 1) Color(0xFFD32F2F)
                         else MaterialTheme.colorScheme.outline)
                     Spacer(Modifier.width(4.dp))
+                    Chip("${ap.widthMhz}MHz", MaterialTheme.colorScheme.tertiary)
+                    Spacer(Modifier.width(4.dp))
                     Icon(
                         if (ap.security == "开放") Icons.Default.LockOpen else Icons.Default.Lock,
                         null, modifier = Modifier.size(14.dp),
@@ -147,7 +157,8 @@ private fun ApCard(ap: WifiAp, sameChannel: Int) {
                     Spacer(Modifier.width(2.dp))
                     Text(ap.security,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
