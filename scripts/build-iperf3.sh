@@ -27,6 +27,15 @@ if [[ ! -d "$SRC" ]]; then
   curl -fL --retry 3 -o iperf.tgz \
     "https://github.com/esnet/iperf/releases/download/$IPERF3_VERSION/iperf-$IPERF3_VERSION.tar.gz"
   tar xzf iperf.tgz
+
+  # Patch: iperf3 3.17.x 在 Android 上把 PTHREAD_CANCEL_ENABLE/DISABLE 错误地定义为
+  # NULL（指针），而后续代码把它传给收 int 的函数。clang 17+ 直接报错，必须改成数字。
+  PT_HDR="$SRC/src/iperf_pthread.h"
+  if [[ -f "$PT_HDR" ]]; then
+    sed -i 's|#define[[:space:]]\+PTHREAD_CANCEL_ENABLE[[:space:]]\+NULL|#define PTHREAD_CANCEL_ENABLE 0|' "$PT_HDR"
+    sed -i 's|#define[[:space:]]\+PTHREAD_CANCEL_DISABLE[[:space:]]\+NULL|#define PTHREAD_CANCEL_DISABLE 1|' "$PT_HDR"
+    echo "Patched $PT_HDR"
+  fi
 fi
 
 build_one() {
@@ -39,7 +48,7 @@ build_one() {
   export AR="$TOOLCHAIN/bin/llvm-ar"
   export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
   export STRIP="$TOOLCHAIN/bin/llvm-strip"
-  export CFLAGS="-fPIE -O2 -D_FILE_OFFSET_BITS=64"
+  export CFLAGS="-fPIE -O2 -D_FILE_OFFSET_BITS=64 -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
   export LDFLAGS="-fPIE -pie"
 
   ac_cv_func_malloc_0_nonnull=yes \
