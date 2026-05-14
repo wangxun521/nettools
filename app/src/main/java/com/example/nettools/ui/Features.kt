@@ -1,6 +1,7 @@
 package com.example.nettools.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.Public
@@ -41,4 +42,6 @@ val FEATURES = listOf(
         Icons.Default.LocationOn, Color(0xFFF57C00)),
     Feature("iperf3", "iperf3 测速", "TCP/UDP 带宽实测",
         Icons.Default.Speed, Color(0xFF455A64)),
+    Feature("cell", "基站扫描", "周边 2G/3G/4G/5G 小区",
+        Icons.Default.CellTower, Color(0xFF512DA8)),
 )

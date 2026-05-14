@@ -31,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.nettools.ui.CellScreen
 import com.example.nettools.ui.DnsScreen
 import com.example.nettools.ui.FEATURES
 import com.example.nettools.ui.HomeScreen
@@ -99,6 +100,7 @@ private fun AppRoot() {
                         composable("whois") { WhoisScreen() }
                         composable("ipgeo") { IpGeoScreen() }
                         composable("iperf3") { Iperf3Screen() }
+                        composable("cell") { CellScreen() }
                     }
                 }
             }
