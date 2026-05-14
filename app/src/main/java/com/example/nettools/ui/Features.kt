@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SignalWifi4Bar
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.ui.graphics.Color
@@ -38,4 +39,6 @@ val FEATURES = listOf(
         Icons.Default.Search, Color(0xFF5D4037)),
     Feature("ipgeo", "IP 定位", "IP 归属地 / ISP / AS",
         Icons.Default.LocationOn, Color(0xFFF57C00)),
+    Feature("iperf3", "iperf3 测速", "TCP/UDP 带宽实测",
+        Icons.Default.Speed, Color(0xFF455A64)),
 )

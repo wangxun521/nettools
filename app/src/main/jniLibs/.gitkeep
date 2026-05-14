@@ -1,0 +1,2 @@
+# iperf3 二进制由 .github/workflows/build-iperf3.yml 生成并提交到此处
+# 文件命名为 libiperf3.so（伪装成共享库以便 Android 解压）

@@ -1,0 +1,62 @@
+name: Build iperf3 native binaries (one-shot)
+
+# 跑一次就行。它会用 NDK 编译 4 个 ABI 的 iperf3，commit & push 到当前分支。
+# 之后主 android.yml 自动把这些 .so 打进 APK。
+on:
+  workflow_dispatch:
+    inputs:
+      iperf3_version:
+        description: 'iperf3 版本'
+        required: true
+        default: '3.17.1'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+          add-to-path: false
+
+      - name: Build iperf3 for all ABIs
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          IPERF3_VERSION: ${{ github.event.inputs.iperf3_version }}
+        run: |
+          chmod +x scripts/build-iperf3.sh
+          ./scripts/build-iperf3.sh
+
+      - name: Show artifacts
+        run: |
+          echo "=== Built binaries ==="
+          ls -la app/src/main/jniLibs/*/libiperf3.so
+          file app/src/main/jniLibs/*/libiperf3.so
+
+      - name: Commit binaries to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/jniLibs/
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Add iperf3 ${{ github.event.inputs.iperf3_version }} native binaries"
+            git push
+          fi
+
+      - name: Upload as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: iperf3-binaries
+          path: app/src/main/jniLibs/
+          retention-days: 30

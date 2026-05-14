@@ -34,6 +34,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.nettools.ui.DnsScreen
 import com.example.nettools.ui.FEATURES
 import com.example.nettools.ui.HomeScreen
+import com.example.nettools.ui.Iperf3Screen
 import com.example.nettools.ui.IpGeoScreen
 import com.example.nettools.ui.PingScreen
 import com.example.nettools.ui.PortScanScreen
@@ -97,6 +98,7 @@ private fun AppRoot() {
                         composable("wifi_scan") { WifiScanScreen() }
                         composable("whois") { WhoisScreen() }
                         composable("ipgeo") { IpGeoScreen() }
+                        composable("iperf3") { Iperf3Screen() }
                     }
                 }
             }

@@ -45,6 +45,9 @@ android {
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
+        // 让 iperf3 这个 ELF（伪装成 .so）安装时被解压到 nativeLibraryDir，
+        // 这样 App 才能用 Runtime.exec() 调用它。
+        jniLibs.useLegacyPackaging = true
     }
 }
 
