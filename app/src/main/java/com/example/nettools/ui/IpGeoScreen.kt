@@ -11,12 +11,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.GeoResult
 import com.example.nettools.core.IpGeo
+import com.example.nettools.core.rememberPrefString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
 fun IpGeoScreen() {
-    var ip by remember { mutableStateOf("") }
+    var ip by rememberPrefString("ipgeo_ip", "")
     var res by remember { mutableStateOf<GeoResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }

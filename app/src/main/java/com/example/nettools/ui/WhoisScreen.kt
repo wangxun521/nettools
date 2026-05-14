@@ -11,12 +11,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.Whois
 import com.example.nettools.core.WhoisResponse
+import com.example.nettools.core.rememberPrefString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
 fun WhoisScreen() {
-    var domain by remember { mutableStateOf("example.com") }
+    var domain by rememberPrefString("whois_domain", "example.com")
     val responses = remember { mutableStateListOf<WhoisResponse>() }
     var error by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }

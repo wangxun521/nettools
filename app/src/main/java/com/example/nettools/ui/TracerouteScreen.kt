@@ -11,14 +11,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.Hop
 import com.example.nettools.core.Traceroute
+import com.example.nettools.core.rememberPrefString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @Composable
 fun TracerouteScreen() {
-    var host by remember { mutableStateOf("www.google.com") }
-    var maxHops by remember { mutableStateOf("30") }
+    var host by rememberPrefString("trace_host", "www.google.com")
+    var maxHops by rememberPrefString("trace_max", "30")
     val hops = remember { mutableStateListOf<Hop>() }
     var job by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()

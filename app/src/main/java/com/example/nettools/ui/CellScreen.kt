@@ -5,10 +5,13 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material3.*
@@ -24,13 +27,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.nettools.core.CellScanner
 import com.example.nettools.core.CellTower
-import kotlinx.coroutines.flow.collect
 
 private val REQUIRED_PERMS = arrayOf(
     Manifest.permission.ACCESS_FINE_LOCATION,
     Manifest.permission.READ_PHONE_STATE,
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CellScreen() {
     val ctx = LocalContext.current
@@ -46,6 +49,7 @@ fun CellScreen() {
     val supported = remember { CellScanner.supported(ctx) }
     val operator = remember { CellScanner.operatorName(ctx) }
     val towers = remember { mutableStateListOf<CellTower>() }
+    var selected by remember { mutableStateOf<CellTower?>(null) }
 
     LaunchedEffect(granted) {
         if (!granted) return@LaunchedEffect
@@ -89,8 +93,9 @@ fun CellScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 不用 key，避免空 CID/PCI 邻区导致 key 重复崩溃
-                items(towers) { TowerCard(it) }
+                items(towers) { tower ->
+                    TowerCard(tower, onClick = { selected = tower })
+                }
             }
         } else if (granted) {
             Spacer(Modifier.height(12.dp))
@@ -101,23 +106,20 @@ fun CellScreen() {
             }
         }
     }
+
+    if (selected != null) {
+        ModalBottomSheet(onDismissRequest = { selected = null }) {
+            TowerDetail(selected!!)
+        }
+    }
 }
 
 @Composable
-private fun TowerCard(c: CellTower) {
-    val techColor = when (c.tech) {
-        "5G" -> Color(0xFF6A1B9A)
-        "4G" -> Color(0xFF2E7D32)
-        "3G" -> Color(0xFFEF6C00)
-        else -> Color(0xFFC62828)
-    }
+private fun TowerCard(c: CellTower, onClick: () -> Unit) {
+    val techColor = techColor(c.tech)
     val sig = signalLevelDbm(c.dbm)
-    val sigColor = when (sig) {
-        4 -> Color(0xFF2E7D32); 3 -> Color(0xFF689F38)
-        2 -> Color(0xFFF9A825); 1 -> Color(0xFFEF6C00)
-        else -> Color(0xFFD32F2F)
-    }
-    ElevatedCard(Modifier.fillMaxWidth()) {
+    val sigColor = signalColor(sig)
+    ElevatedCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
@@ -143,25 +145,117 @@ private fun TowerCard(c: CellTower) {
                 Text(buildIdLine(c),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace)
-                Spacer(Modifier.height(2.dp))
-                Text(buildBandLine(c),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (c.rsrp != null || c.rsrq != null || c.sinr != null) {
-                    Text(buildRfLine(c),
+                val band = buildBandLine(c)
+                if (band.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(band,
                         style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("${c.dbm} dBm",
+                Text(c.dbm?.let { "$it dBm" } ?: "—",
                     style = MaterialTheme.typography.titleSmall,
                     color = sigColor, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(2.dp))
                 SignalBarsCell(sig, sigColor)
             }
         }
+    }
+}
+
+@Composable
+private fun TowerDetail(c: CellTower) {
+    val techColor = techColor(c.tech)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(52.dp).clip(RoundedCornerShape(14.dp))
+                    .background(techColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Default.CellTower, null, tint = techColor,
+                modifier = Modifier.size(28.dp)) }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(c.tech, style = MaterialTheme.typography.headlineSmall,
+                        color = techColor, fontWeight = FontWeight.Bold)
+                    if (c.isServing) {
+                        Spacer(Modifier.width(8.dp))
+                        TechChip("驻留中", MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Text("小区详情", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+
+        SectionTitle("信号")
+        DetailRow("dBm", c.dbm?.let { "$it dBm" })
+        DetailRow("信号等级", "${c.level} / 4")
+        if (c.tech == "4G") {
+            DetailRow("RSRP", c.rsrp?.let { "$it dBm" }, "参考信号接收功率")
+            DetailRow("RSRQ", c.rsrq?.let { "$it dB" }, "参考信号接收质量")
+            DetailRow("RSSNR", c.sinr?.let { "${it / 10.0} dB" }, "信噪比")
+        } else if (c.tech == "5G") {
+            DetailRow("RSRP", c.rsrp?.let { "$it dBm" }, "参考信号接收功率")
+            DetailRow("RSRQ", c.rsrq?.let { "$it dB" }, "参考信号接收质量")
+            DetailRow("SINR", c.sinr?.let { "$it dB" }, "信噪干扰比")
+        }
+
+        Spacer(Modifier.height(16.dp))
+        SectionTitle("身份")
+        DetailRow("PLMN", c.operatorPlmn.ifBlank { null }, "MCC + MNC")
+        DetailRow("Cell ID", c.cellId?.toString(),
+            if (c.tech == "5G") "NCI (36-bit)" else "CI / CID")
+        DetailRow("PCI", c.pci?.toString(), "物理小区 ID (0..1007)")
+        DetailRow(if (c.tech == "2G" || c.tech == "3G") "LAC" else "TAC",
+            c.tacLac?.toString(),
+            if (c.tech == "2G" || c.tech == "3G") "位置区码" else "跟踪区码")
+
+        Spacer(Modifier.height(16.dp))
+        SectionTitle("频率")
+        DetailRow("频段", c.band)
+        DetailRow("ARFCN", c.arfcn?.toString(),
+            when (c.tech) {
+                "4G" -> "E-UTRA 信道号"
+                "5G" -> "NR 信道号"
+                "3G" -> "UMTS 信道号"
+                else -> "GSM 信道号"
+            })
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(bottom = 4.dp))
+}
+
+@Composable
+private fun DetailRow(label: String, value: String?, hint: String? = null) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.width(96.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            if (hint != null) {
+                Text(hint, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(value ?: "—",
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+            color = if (value == null) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -187,7 +281,21 @@ private fun SignalBarsCell(level: Int, color: Color) {
     }
 }
 
-private fun signalLevelDbm(dbm: Int): Int = when {
+private fun techColor(tech: String): Color = when (tech) {
+    "5G" -> Color(0xFF6A1B9A)
+    "4G" -> Color(0xFF2E7D32)
+    "3G" -> Color(0xFFEF6C00)
+    else -> Color(0xFFC62828)
+}
+
+private fun signalColor(level: Int): Color = when (level) {
+    4 -> Color(0xFF2E7D32); 3 -> Color(0xFF689F38)
+    2 -> Color(0xFFF9A825); 1 -> Color(0xFFEF6C00)
+    else -> Color(0xFFD32F2F)
+}
+
+private fun signalLevelDbm(dbm: Int?): Int = when {
+    dbm == null -> 0
     dbm >= -75 -> 4
     dbm >= -85 -> 3
     dbm >= -95 -> 2
@@ -205,12 +313,6 @@ private fun buildIdLine(c: CellTower): String = buildString {
 private fun buildBandLine(c: CellTower): String = buildString {
     c.band?.let { append(it) }
     c.arfcn?.let { if (isNotEmpty()) append("  ·  "); append("ARFCN $it") }
-}
-
-private fun buildRfLine(c: CellTower): String = buildString {
-    c.rsrp?.let { append("RSRP $it") }
-    c.rsrq?.let { if (isNotEmpty()) append("  RSRQ $it") }
-    c.sinr?.let { if (isNotEmpty()) append("  SINR $it") }
 }
 
 private fun countByTech(list: List<CellTower>): String {

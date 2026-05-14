@@ -15,14 +15,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.Ping
 import com.example.nettools.core.PingLine
+import com.example.nettools.core.rememberPrefString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @Composable
 fun PingScreen() {
-    var host by remember { mutableStateOf("8.8.8.8") }
-    var count by remember { mutableStateOf("10") }
+    var host by rememberPrefString("ping_host", "8.8.8.8")
+    var count by rememberPrefString("ping_count", "10")
     val lines = remember { mutableStateListOf<PingLine>() }
     var job by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()

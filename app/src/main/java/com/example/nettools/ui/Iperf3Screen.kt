@@ -23,6 +23,8 @@ import com.example.nettools.core.IperfInterval
 import com.example.nettools.core.Iperf3Runner
 import com.example.nettools.core.humanBits
 import com.example.nettools.core.humanBytes
+import com.example.nettools.core.rememberPrefBool
+import com.example.nettools.core.rememberPrefString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -33,13 +35,13 @@ fun Iperf3Screen() {
     val available = remember { Iperf3Runner.isAvailable(ctx) }
     val version = remember { Iperf3Runner.version(ctx) }
 
-    var host by remember { mutableStateOf("") }
-    var port by remember { mutableStateOf("5201") }
-    var duration by remember { mutableStateOf("10") }
-    var parallel by remember { mutableStateOf("1") }
-    var reverse by remember { mutableStateOf(false) }
-    var udp by remember { mutableStateOf(false) }
-    var bitrate by remember { mutableStateOf("") }
+    var host by rememberPrefString("iperf_host", "")
+    var port by rememberPrefString("iperf_port", "5201")
+    var duration by rememberPrefString("iperf_duration", "10")
+    var parallel by rememberPrefString("iperf_parallel", "1")
+    var reverse by rememberPrefBool("iperf_reverse", false)
+    var udp by rememberPrefBool("iperf_udp", false)
+    var bitrate by rememberPrefString("iperf_bitrate", "")
 
     val intervals = remember { mutableStateListOf<IperfInterval>() }
     var summarySent by remember { mutableStateOf<IperfInterval?>(null) }

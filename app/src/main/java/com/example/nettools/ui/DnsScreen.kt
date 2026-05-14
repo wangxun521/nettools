@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.DnsResult
 import com.example.nettools.core.DnsScanner
+import com.example.nettools.core.rememberPrefString
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -18,8 +19,8 @@ private val ALL_TYPES = listOf("A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "
 
 @Composable
 fun DnsScreen() {
-    var domain by remember { mutableStateOf("example.com") }
-    var dnsServer by remember { mutableStateOf("") }
+    var domain by rememberPrefString("dns_domain", "example.com")
+    var dnsServer by rememberPrefString("dns_server", "")
     val selected = remember { mutableStateMapOf<String, Boolean>().apply {
         ALL_TYPES.forEach { put(it, it == "A" || it == "AAAA" || it == "MX" || it == "TXT" || it == "NS") }
     } }

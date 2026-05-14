@@ -37,6 +37,7 @@ import com.example.nettools.ui.FEATURES
 import com.example.nettools.ui.HomeScreen
 import com.example.nettools.ui.Iperf3Screen
 import com.example.nettools.ui.IpGeoScreen
+import com.example.nettools.ui.LanScanScreen
 import com.example.nettools.ui.PingScreen
 import com.example.nettools.ui.PortScanScreen
 import com.example.nettools.ui.TracerouteScreen
@@ -101,6 +102,7 @@ private fun AppRoot() {
                         composable("ipgeo") { IpGeoScreen() }
                         composable("iperf3") { Iperf3Screen() }
                         composable("cell") { CellScreen() }
+                        composable("lan") { LanScanScreen() }
                     }
                 }
             }

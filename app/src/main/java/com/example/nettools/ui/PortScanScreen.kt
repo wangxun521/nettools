@@ -12,16 +12,18 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.PortResult
 import com.example.nettools.core.PortScanner
+import com.example.nettools.core.rememberPrefString
+import com.example.nettools.core.rememberPrefBool
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @Composable
 fun PortScanScreen() {
-    var host by remember { mutableStateOf("scanme.nmap.org") }
-    var portsExpr by remember { mutableStateOf("21,22,80,443,3306,3389,8080,8443") }
-    var concurrency by remember { mutableStateOf("64") }
-    var showOpenOnly by remember { mutableStateOf(true) }
+    var host by rememberPrefString("port_host", "scanme.nmap.org")
+    var portsExpr by rememberPrefString("port_ports", "21,22,80,443,3306,3389,8080,8443")
+    var concurrency by rememberPrefString("port_concurrency", "64")
+    var showOpenOnly by rememberPrefBool("port_open_only", true)
     val results = remember { mutableStateListOf<PortResult>() }
     var job by remember { mutableStateOf<Job?>(null) }
     var totalCount by remember { mutableIntStateOf(0) }

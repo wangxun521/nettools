@@ -26,18 +26,24 @@ import kotlinx.coroutines.flow.flowOn
 data class CellTower(
     val tech: String,          // 2G / 3G / 4G / 5G
     val operatorPlmn: String,  // MCC+MNC
-    val cellId: Long?,         // CI / CID
+    val cellId: Long?,         // CI / CID / NCI
     val pci: Int?,             // 物理小区 ID (LTE/NR/TDSCDMA)
     val tacLac: Int?,          // TAC (LTE/NR) 或 LAC (GSM/WCDMA)
     val arfcn: Int?,           // ARFCN/EARFCN/NRARFCN
     val band: String?,         // 频段（如 B3、B41、n78）
-    val dbm: Int,
+    val dbm: Int?,             // null = 未知
     val level: Int,            // 0..4
     val isServing: Boolean,    // 当前驻留小区
     val rsrp: Int? = null,     // LTE/NR
     val rsrq: Int? = null,
-    val sinr: Int? = null,
+    val sinr: Int? = null,     // LTE: rssnr (dB×10) / NR: dB
 )
+
+// Android 用 Int.MAX_VALUE / Long.MAX_VALUE 表示"未知/无效"
+private fun Int.clean(): Int? =
+    if (this == Int.MAX_VALUE || this == Int.MIN_VALUE) null else this
+private fun Long.clean(): Long? =
+    if (this == Long.MAX_VALUE || this == Long.MIN_VALUE || this == Int.MAX_VALUE.toLong()) null else this
 
 object CellScanner {
 
@@ -82,19 +88,19 @@ object CellScanner {
         val id = c.cellIdentity
         val s = c.cellSignalStrength
         val plmn = (id.mccString.orEmpty()) + (id.mncString.orEmpty())
-        val rsrp = s.rsrpSafe()
-        val rsrq = if (Build.VERSION.SDK_INT >= 26) runCatching { s.rsrq }.getOrNull() else null
-        val sinr = if (Build.VERSION.SDK_INT >= 26) runCatching { s.rssnr }.getOrNull() else null
-        val earfcn = if (Build.VERSION.SDK_INT >= 24) runCatching { id.earfcn }.getOrNull() else null
+        val rsrp = if (Build.VERSION.SDK_INT >= 26) runCatching { s.rsrp }.getOrNull()?.clean() else null
+        val rsrq = if (Build.VERSION.SDK_INT >= 26) runCatching { s.rsrq }.getOrNull()?.clean() else null
+        val sinr = if (Build.VERSION.SDK_INT >= 26) runCatching { s.rssnr }.getOrNull()?.clean() else null
+        val earfcn = if (Build.VERSION.SDK_INT >= 24) runCatching { id.earfcn }.getOrNull()?.clean() else null
         return CellTower(
             tech = "4G",
             operatorPlmn = plmn,
-            cellId = id.ci.takeUnsignedOrNull(),
-            pci = id.pci.takeIf { it != Int.MAX_VALUE },
-            tacLac = id.tac.takeIf { it != Int.MAX_VALUE },
-            arfcn = earfcn?.takeIf { it != Int.MAX_VALUE },
+            cellId = id.ci.toLong().clean(),
+            pci = id.pci.clean(),
+            tacLac = id.tac.clean(),
+            arfcn = earfcn,
             band = earfcn?.let { lteBand(it) },
-            dbm = s.dbm,
+            dbm = s.dbm.clean(),
             level = s.level,
             isServing = c.isRegistered,
             rsrp = rsrp, rsrq = rsrq, sinr = sinr,
@@ -105,16 +111,16 @@ object CellScanner {
         val id: CellIdentityGsm = c.cellIdentity
         val s = c.cellSignalStrength
         val plmn = (id.mccString.orEmpty()) + (id.mncString.orEmpty())
-        val arfcn = if (Build.VERSION.SDK_INT >= 24) runCatching { id.arfcn }.getOrNull() else null
+        val arfcn = if (Build.VERSION.SDK_INT >= 24) runCatching { id.arfcn }.getOrNull()?.clean() else null
         return CellTower(
             tech = "2G",
             operatorPlmn = plmn,
-            cellId = id.cid.toLong().takeIf { id.cid != Int.MAX_VALUE },
+            cellId = id.cid.toLong().clean(),
             pci = null,
-            tacLac = id.lac.takeIf { it != Int.MAX_VALUE },
-            arfcn = arfcn?.takeIf { it != Int.MAX_VALUE },
+            tacLac = id.lac.clean(),
+            arfcn = arfcn,
             band = null,
-            dbm = s.dbm,
+            dbm = s.dbm.clean(),
             level = s.level,
             isServing = c.isRegistered,
         )
@@ -124,16 +130,16 @@ object CellScanner {
         val id: CellIdentityWcdma = c.cellIdentity
         val s = c.cellSignalStrength
         val plmn = (id.mccString.orEmpty()) + (id.mncString.orEmpty())
-        val uarfcn = if (Build.VERSION.SDK_INT >= 24) runCatching { id.uarfcn }.getOrNull() else null
+        val uarfcn = if (Build.VERSION.SDK_INT >= 24) runCatching { id.uarfcn }.getOrNull()?.clean() else null
         return CellTower(
             tech = "3G",
             operatorPlmn = plmn,
-            cellId = id.cid.toLong().takeIf { id.cid != Int.MAX_VALUE },
-            pci = id.psc.takeIf { it != Int.MAX_VALUE },
-            tacLac = id.lac.takeIf { it != Int.MAX_VALUE },
-            arfcn = uarfcn?.takeIf { it != Int.MAX_VALUE },
+            cellId = id.cid.toLong().clean(),
+            pci = id.psc.clean(),
+            tacLac = id.lac.clean(),
+            arfcn = uarfcn,
             band = null,
-            dbm = s.dbm,
+            dbm = s.dbm.clean(),
             level = s.level,
             isServing = c.isRegistered,
         )
@@ -147,12 +153,12 @@ object CellScanner {
         return CellTower(
             tech = "3G",
             operatorPlmn = plmn,
-            cellId = id.cid.toLong().takeIf { id.cid != Int.MAX_VALUE },
-            pci = id.cpid.takeIf { it != Int.MAX_VALUE },
-            tacLac = id.lac.takeIf { it != Int.MAX_VALUE },
-            arfcn = id.uarfcn.takeIf { it != Int.MAX_VALUE },
+            cellId = id.cid.toLong().clean(),
+            pci = id.cpid.clean(),
+            tacLac = id.lac.clean(),
+            arfcn = id.uarfcn.clean(),
             band = null,
-            dbm = s.dbm,
+            dbm = s.dbm.clean(),
             level = s.level,
             isServing = c.isRegistered,
         )
@@ -163,30 +169,27 @@ object CellScanner {
         val id = c.cellIdentity as CellIdentityNr
         val s = c.cellSignalStrength as CellSignalStrengthNr
         val plmn = (id.mccString.orEmpty()) + (id.mncString.orEmpty())
-        val nrarfcn = id.nrarfcn.takeIf { it != Int.MAX_VALUE }
+        val nrarfcn = id.nrarfcn.clean()
+        // 优先用 CSI，其次 SS；MAX_VALUE 表示无效
+        val rsrp = (s.csiRsrp.clean() ?: s.ssRsrp.clean())
+        val rsrq = (s.csiRsrq.clean() ?: s.ssRsrq.clean())
+        val sinr = (s.csiSinr.clean() ?: s.ssSinr.clean())
+        // 邻区的 dBm 经常是 MAX_VALUE，过滤掉
+        val dbm = s.dbm.clean() ?: rsrp
         return CellTower(
             tech = "5G",
             operatorPlmn = plmn,
-            cellId = id.nci.takeIf { it != Long.MAX_VALUE },
-            pci = id.pci.takeIf { it != Int.MAX_VALUE },
-            tacLac = id.tac.takeIf { it != Int.MAX_VALUE },
+            cellId = id.nci.clean(),
+            pci = id.pci.clean(),
+            tacLac = id.tac.clean(),
             arfcn = nrarfcn,
             band = nrarfcn?.let { nrBand(it) },
-            dbm = s.dbm,
+            dbm = dbm,
             level = s.level,
             isServing = c.isRegistered,
-            rsrp = s.csiRsrp.takeIf { it != Int.MAX_VALUE } ?: s.ssRsrp.takeIf { it != Int.MAX_VALUE },
-            rsrq = s.csiRsrq.takeIf { it != Int.MAX_VALUE } ?: s.ssRsrq.takeIf { it != Int.MAX_VALUE },
-            sinr = s.csiSinr.takeIf { it != Int.MAX_VALUE } ?: s.ssSinr.takeIf { it != Int.MAX_VALUE },
+            rsrp = rsrp, rsrq = rsrq, sinr = sinr,
         )
     }
-
-    private fun CellSignalStrengthLte.rsrpSafe(): Int? = runCatching {
-        if (Build.VERSION.SDK_INT >= 26) this.rsrp.takeIf { it != Int.MAX_VALUE } else null
-    }.getOrNull()
-
-    private fun Int.takeUnsignedOrNull(): Long? =
-        if (this == Int.MAX_VALUE || this < 0) null else this.toLong()
 
     /** 把 EARFCN 转成 LTE Band（仅常用 FDD/TDD 频段） */
     private fun lteBand(earfcn: Int): String? = when (earfcn) {
