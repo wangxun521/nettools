@@ -21,8 +21,8 @@ fun WhoisScreen() {
     val responses = remember { mutableStateListOf<WhoisResponse>() }
     var error by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(Modifier.padding(16.dp).fillMaxSize()) {
         OutlinedTextField(domain, { domain = it }, label = { Text("域名") },
@@ -33,10 +33,13 @@ fun WhoisScreen() {
                 enabled = !running && domain.isNotBlank(),
                 onClick = {
                     responses.clear(); error = null
+                    running = true
                     job = scope.launch {
-                        runCatching { Whois.lookup(domain.trim()) }
-                            .onSuccess { responses.addAll(it) }
-                            .onFailure { error = it.message ?: it.javaClass.simpleName }
+                        try {
+                            runCatching { Whois.lookup(domain.trim()) }
+                                .onSuccess { responses.addAll(it) }
+                                .onFailure { error = it.message ?: it.javaClass.simpleName }
+                        } finally { running = false }
                     }
                 }
             ) { Text("查询") }

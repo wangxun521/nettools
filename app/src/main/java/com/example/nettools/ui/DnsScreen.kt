@@ -26,8 +26,8 @@ fun DnsScreen() {
     } }
     val results = remember { mutableStateListOf<DnsResult>() }
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(Modifier.padding(16.dp).fillMaxSize()) {
         OutlinedTextField(domain, { domain = it }, label = { Text("域名") },
@@ -55,10 +55,13 @@ fun DnsScreen() {
                 onClick = {
                     results.clear()
                     val types = ALL_TYPES.filter { selected[it] == true }.ifEmpty { ALL_TYPES }
+                    running = true
                     job = scope.launch {
-                        val r = DnsScanner.scan(domain.trim(),
-                            dnsServer.trim().ifBlank { null }, types)
-                        results.addAll(r)
+                        try {
+                            val r = DnsScanner.scan(domain.trim(),
+                                dnsServer.trim().ifBlank { null }, types)
+                            results.addAll(r)
+                        } finally { running = false }
                     }
                 }
             ) { Text("扫描") }

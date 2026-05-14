@@ -22,8 +22,8 @@ fun TracerouteScreen() {
     var maxHops by rememberPrefString("trace_max", "30")
     val hops = remember { mutableStateListOf<Hop>() }
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(Modifier.padding(16.dp).fillMaxSize()) {
         OutlinedTextField(host, { host = it }, label = { Text("主机 / IP") },
@@ -39,8 +39,11 @@ fun TracerouteScreen() {
                 onClick = {
                     hops.clear()
                     val mh = maxHops.toIntOrNull()?.coerceIn(1, 64) ?: 30
+                    running = true
                     job = scope.launch {
-                        Traceroute.stream(host.trim(), mh).collect { hops.add(it) }
+                        try {
+                            Traceroute.stream(host.trim(), mh).collect { hops.add(it) }
+                        } finally { running = false }
                     }
                 }
             ) { Text("开始") }

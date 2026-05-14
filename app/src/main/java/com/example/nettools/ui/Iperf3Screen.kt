@@ -50,8 +50,8 @@ fun Iperf3Screen() {
     var currentBps by remember { mutableDoubleStateOf(0.0) }
 
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(
         Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())
@@ -127,20 +127,23 @@ fun Iperf3Screen() {
                                 udp = udp,
                                 bitrateMbps = bitrate.toIntOrNull().takeIf { udp },
                             )
+                            running = true
                             job = scope.launch {
-                                Iperf3Runner.run(ctx, cfg).collect { ev ->
-                                    when (ev) {
-                                        is IperfEvent.Interval -> {
-                                            intervals.add(ev.data)
-                                            currentBps = ev.data.bitsPerSec
+                                try {
+                                    Iperf3Runner.run(ctx, cfg).collect { ev ->
+                                        when (ev) {
+                                            is IperfEvent.Interval -> {
+                                                intervals.add(ev.data)
+                                                currentBps = ev.data.bitsPerSec
+                                            }
+                                            is IperfEvent.Summary -> {
+                                                summarySent = ev.sent; summaryRecv = ev.recv
+                                            }
+                                            is IperfEvent.Error -> errorMsg = ev.message
+                                            is IperfEvent.Line, IperfEvent.Done -> Unit
                                         }
-                                        is IperfEvent.Summary -> {
-                                            summarySent = ev.sent; summaryRecv = ev.recv
-                                        }
-                                        is IperfEvent.Error -> errorMsg = ev.message
-                                        is IperfEvent.Line, IperfEvent.Done -> Unit
                                     }
-                                }
+                                } finally { running = false }
                             }
                         },
                         modifier = Modifier.weight(1f),

@@ -27,8 +27,8 @@ fun PortScanScreen() {
     val results = remember { mutableStateListOf<PortResult>() }
     var job by remember { mutableStateOf<Job?>(null) }
     var totalCount by remember { mutableIntStateOf(0) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(Modifier.padding(16.dp).fillMaxSize()) {
         OutlinedTextField(host, { host = it }, label = { Text("主机 / IP") },
@@ -56,8 +56,11 @@ fun PortScanScreen() {
                     val ports = PortScanner.parsePorts(portsExpr)
                     totalCount = ports.size
                     val c = concurrency.toIntOrNull()?.coerceIn(1, 256) ?: 64
+                    running = true
                     job = scope.launch {
-                        PortScanner.scan(host.trim(), ports, c).collect { results.add(it) }
+                        try {
+                            PortScanner.scan(host.trim(), ports, c).collect { results.add(it) }
+                        } finally { running = false }
                     }
                 }
             ) { Text("扫描") }

@@ -21,8 +21,8 @@ fun IpGeoScreen() {
     var res by remember { mutableStateOf<GeoResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(Modifier.padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState())) {
         OutlinedTextField(ip, { ip = it },
@@ -35,13 +35,16 @@ fun IpGeoScreen() {
                 enabled = !running,
                 onClick = {
                     res = null; error = null
+                    running = true
                     job = scope.launch {
-                        runCatching { IpGeo.lookup(ip.ifBlank { null }) }
-                            .onSuccess {
-                                if (it.status == "success") res = it
-                                else error = it.message ?: "查询失败"
-                            }
-                            .onFailure { error = it.message ?: it.javaClass.simpleName }
+                        try {
+                            runCatching { IpGeo.lookup(ip.ifBlank { null }) }
+                                .onSuccess {
+                                    if (it.status == "success") res = it
+                                    else error = it.message ?: "查询失败"
+                                }
+                                .onFailure { error = it.message ?: it.javaClass.simpleName }
+                        } finally { running = false }
                     }
                 }
             ) { Text("查询") }

@@ -40,8 +40,8 @@ fun LanScanScreen() {
 
     val hosts = remember { mutableStateListOf<LanHost>() }
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         if (detected != null) {
@@ -97,8 +97,11 @@ fun LanScanScreen() {
                         totalHosts = (1 shl (32 - (cidrParts.getOrNull(1)?.toIntOrNull() ?: 24))) - 2,
                     )
                     val c = concurrency.toIntOrNull()?.coerceIn(1, 256) ?: 64
+                    running = true
                     job = scope.launch {
-                        LanScanner.scan(target, c).collect { hosts.add(it) }
+                        try {
+                            LanScanner.scan(target, c).collect { hosts.add(it) }
+                        } finally { running = false }
                     }
                 },
                 modifier = Modifier.weight(1f),

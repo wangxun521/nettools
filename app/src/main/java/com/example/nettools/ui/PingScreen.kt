@@ -26,8 +26,8 @@ fun PingScreen() {
     var count by rememberPrefString("ping_count", "10")
     val lines = remember { mutableStateListOf<PingLine>() }
     var job by remember { mutableStateOf<Job?>(null) }
+    var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val running = job?.isActive == true
 
     val rtts = lines.mapNotNull { it.rttMs }
     val avg = if (rtts.isNotEmpty()) rtts.average() else null
@@ -50,8 +50,11 @@ fun PingScreen() {
                         onClick = {
                             lines.clear()
                             val n = count.toIntOrNull() ?: 4
+                            running = true
                             job = scope.launch {
-                                Ping.stream(host.trim(), n).collectLatest { lines.add(it) }
+                                try {
+                                    Ping.stream(host.trim(), n).collectLatest { lines.add(it) }
+                                } finally { running = false }
                             }
                         },
                         modifier = Modifier.weight(1f),
