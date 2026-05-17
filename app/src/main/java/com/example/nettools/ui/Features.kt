@@ -2,8 +2,13 @@ package com.example.nettools.ui
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Route
@@ -47,4 +52,14 @@ val FEATURES = listOf(
         Icons.Default.CellTower, Color(0xFF512DA8)),
     Feature("lan", "局域网扫描", "发现同网段在线设备",
         Icons.Default.Hub, Color(0xFF00695C)),
+    Feature("discover", "服务发现", "mDNS / SSDP / UPnP",
+        Icons.Default.Devices, Color(0xFF00838F)),
+    Feature("wol", "Wake-on-LAN", "魔法包远程开机",
+        Icons.Default.PowerSettingsNew, Color(0xFFE65100)),
+    Feature("latency", "延迟监控", "连续 ping + 折线图",
+        Icons.Default.Timeline, Color(0xFF1976D2)),
+    Feature("traffic", "流量监控", "实时上下行速率",
+        Icons.Default.Traffic, Color(0xFF455A64)),
+    Feature("dnsmon", "DNS 监控", "解析时间持续跟踪",
+        Icons.Default.GraphicEq, Color(0xFF6A1B9A)),
 )
