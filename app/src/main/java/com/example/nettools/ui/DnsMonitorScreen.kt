@@ -12,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.nettools.core.DnsScanner
+import com.example.nettools.core.rememberPrefBool
 import com.example.nettools.core.rememberPrefString
+import kotlin.random.Random
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -24,6 +26,7 @@ fun DnsMonitorScreen() {
     var domain by rememberPrefString("dnsmon_domain", "www.google.com")
     var dnsServer by rememberPrefString("dnsmon_server", "")
     var intervalSec by rememberPrefString("dnsmon_interval", "2")
+    var bustCache by rememberPrefBool("dnsmon_bust", true)
 
     val points = remember { mutableStateListOf<Float?>() }
     var running by remember { mutableStateOf(false) }
@@ -53,6 +56,18 @@ fun DnsMonitorScreen() {
                     { intervalSec = it.filter(Char::isDigit) },
                     label = { Text("间隔（秒）") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = bustCache, onCheckedChange = { bustCache = it })
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("防缓存（随机子域名）",
+                            style = MaterialTheme.typography.bodyMedium)
+                        Text("每次查询前加随机前缀，绕过递归解析器缓存",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Row {
                     FilledTonalButton(
@@ -65,14 +80,29 @@ fun DnsMonitorScreen() {
                                 try {
                                     while (true) {
                                         sent++
+                                        val q = if (bustCache) {
+                                            val rnd = (1..8).map {
+                                                "abcdefghijklmnopqrstuvwxyz0123456789"
+                                                    .random()
+                                            }.joinToString("")
+                                            "nettools-$rnd.${domain.trim()}"
+                                        } else domain.trim()
                                         val results = DnsScanner.scan(
-                                            domain.trim(),
+                                            q,
                                             dnsServer.trim().ifBlank { null },
                                             listOf("A"),
                                         )
                                         val r = results.firstOrNull()
-                                        if (r != null && r.records.isNotEmpty()) {
+                                        // 防缓存模式下大概率 NXDOMAIN，只要 server 答了就算成功
+                                        val ok = r != null && (
+                                            r.records.isNotEmpty() ||
+                                            (bustCache && r.error?.contains("NXDOMAIN") == true) ||
+                                            (bustCache && r.error?.contains("不存在") == true) ||
+                                            (bustCache && r.error?.contains("无此类型") == true)
+                                        )
+                                        if (ok && r != null) {
                                             points.add(r.tookMs.toFloat())
+                                            lastError = null
                                         } else {
                                             points.add(null)
                                             lastError = r?.error
