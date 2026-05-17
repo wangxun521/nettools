@@ -1,6 +1,8 @@
 package com.example.nettools.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -35,7 +37,7 @@ fun WolScreen() {
     var result by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         ElevatedCard {
             Column(Modifier.padding(16.dp)) {
                 OutlinedTextField(mac, { mac = it.uppercase() },

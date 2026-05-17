@@ -1,6 +1,8 @@
 package com.example.nettools.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -36,7 +38,7 @@ fun LatencyMonitorScreen() {
     val lost = sent - received
     val lossRate = if (sent > 0) lost * 100.0 / sent else 0.0
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         ElevatedCard {
             Column(Modifier.padding(16.dp)) {
                 OutlinedTextField(host, { host = it }, label = { Text("主机 / IP") },
