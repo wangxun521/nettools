@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import org.xbill.DNS.Cache
 import org.xbill.DNS.DClass
 import org.xbill.DNS.ExtendedResolver
 import org.xbill.DNS.Lookup
@@ -73,16 +74,18 @@ object DnsScanner {
         val start = System.currentTimeMillis()
         return try {
             val lookup = Lookup(Name.fromString(domain.ensureDot()), code, DClass.IN)
+            // 每次查询用独立 Cache，避免全局缓存把上一次的 NXDOMAIN/SERVFAIL 串到当前类型
+            lookup.setCache(Cache(DClass.IN))
             if (!dnsServer.isNullOrBlank()) {
                 lookup.setResolver(buildResolver(dnsServer, timeoutMs))
             }
             val records: Array<Record>? = lookup.run()
             val took = System.currentTimeMillis() - start
-            if (lookup.result == Lookup.SUCCESSFUL && records != null) {
-                DnsResult(
+            when (lookup.result) {
+                Lookup.SUCCESSFUL -> DnsResult(
                     type = label,
                     tookMs = took,
-                    records = records.map {
+                    records = (records ?: emptyArray()).map {
                         DnsRecord(
                             type = Type.string(it.type),
                             name = it.name.toString(),
@@ -91,8 +94,11 @@ object DnsScanner {
                         )
                     },
                 )
-            } else {
-                DnsResult(label, emptyList(), lookup.errorString, took)
+                Lookup.TYPE_NOT_FOUND -> DnsResult(label, emptyList(), "无此类型记录", took)
+                Lookup.HOST_NOT_FOUND -> DnsResult(label, emptyList(), "域名不存在 (NXDOMAIN)", took)
+                Lookup.TRY_AGAIN -> DnsResult(label, emptyList(), "服务器无响应 / 超时", took)
+                Lookup.UNRECOVERABLE -> DnsResult(label, emptyList(), "解析失败 (SERVFAIL)", took)
+                else -> DnsResult(label, emptyList(), lookup.errorString, took)
             }
         } catch (t: Throwable) {
             DnsResult(label, emptyList(), t.message ?: t.javaClass.simpleName,
